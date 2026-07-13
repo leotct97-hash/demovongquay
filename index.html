@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
@@ -592,7 +592,7 @@
     "use strict";
 
     // ===== THÔNG SỐ QUAY =====
-    const ROLL_DURATION_MS = 2000;  // Quay trong 2 giây
+    const ROLL_DURATION_MS = 3000;  // Quay trong 3 giây
     const ROLL_INTERVAL_MS = 100;   // Nhảy số sau mỗi 0,1 giây
     const RESULT_VISIBLE_MS = 2000; // Hiện thông báo kết quả 2 giây
 
@@ -655,6 +655,73 @@
 
     function randomItem(items) {
       return items[Math.floor(Math.random() * items.length)] || null;
+    }
+
+    // ===== ÂM THANH ROLLING =====
+    // Tạo âm thanh trực tiếp bằng Web Audio API, không cần kèm file MP3.
+    let audioContext = null;
+
+    function getAudioContext() {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return null;
+
+      if (!audioContext) audioContext = new AudioContextClass();
+      if (audioContext.state === "suspended") {
+        audioContext.resume().catch(() => {});
+      }
+      return audioContext;
+    }
+
+    function playRollingTick() {
+      try {
+        const context = getAudioContext();
+        if (!context) return;
+
+        const now = context.currentTime;
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+
+        oscillator.type = "triangle";
+        oscillator.frequency.setValueAtTime(500 + Math.random() * 220, now);
+
+        gain.gain.setValueAtTime(0.055, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.055);
+
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start(now);
+        oscillator.stop(now + 0.06);
+      } catch (error) {
+        console.warn("Không phát được âm thanh rolling:", error);
+      }
+    }
+
+    function playResultSound() {
+      try {
+        const context = getAudioContext();
+        if (!context) return;
+
+        const now = context.currentTime;
+        [720, 960].forEach((frequency, index) => {
+          const oscillator = context.createOscillator();
+          const gain = context.createGain();
+          const startTime = now + index * 0.11;
+
+          oscillator.type = "sine";
+          oscillator.frequency.setValueAtTime(frequency, startTime);
+
+          gain.gain.setValueAtTime(0.0001, startTime);
+          gain.gain.exponentialRampToValueAtTime(0.12, startTime + 0.015);
+          gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.16);
+
+          oscillator.connect(gain);
+          gain.connect(context.destination);
+          oscillator.start(startTime);
+          oscillator.stop(startTime + 0.18);
+        });
+      } catch (error) {
+        console.warn("Không phát được âm thanh kết quả:", error);
+      }
     }
 
     function numericPart(value) {
@@ -896,6 +963,10 @@
       const finalItem = randomItem(available);
       if (!finalItem) return;
 
+      // Khởi tạo âm thanh ngay trong thao tác nhấn nút để trình duyệt cho phép phát.
+      getAudioContext();
+      playRollingTick();
+
       isRolling = true;
       currentResult = null;
       resultModal.classList.remove("show");
@@ -911,6 +982,7 @@
         if (!preview) return;
         groupDisplay.textContent = preview.topicCode;
         questionDisplay.textContent = preview.questionCode;
+        playRollingTick();
       }, ROLL_INTERVAL_MS);
 
       window.setTimeout(() => {
@@ -927,6 +999,7 @@
         resultGroup.textContent = finalItem.topicCode;
         resultQuestion.textContent = finalItem.questionCode;
         resultModal.classList.add("show");
+        playResultSound();
 
         isRolling = false;
         updateControls();
